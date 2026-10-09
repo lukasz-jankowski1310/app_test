@@ -64,7 +64,7 @@ function escape(string $value): string
         </form>
         <p id="pipeline-message" role="status"></p>
         <div id="pipeline-status" hidden>
-            <p><a id="run-link">Wynik JSON</a></p>
+            <p><a id="run-link">Szczegóły i logi kroków</a></p>
             <button id="refresh-run" type="button">Odśwież wynik</button>
             <pre id="run-result"></pre>
             <ul id="step-logs"></ul>

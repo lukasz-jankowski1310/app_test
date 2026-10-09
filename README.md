@@ -28,8 +28,8 @@ Nie tworzysz obrazu Docker dla każdej aplikacji. Szablon nie wymaga Composera a
    akceptować to wejście. Dla innego kontraktu zmień wejście w `public/run.php`.
 8. Wpisz nazwę metody API w formularzu albo ustaw ją jako domyślną w `lib/config.php`.
    To jawna konfiguracja wskazująca potok, nie poświadczenie. Uruchom potok i kliknij
-   **Odśwież wynik**. Wynik JSON zawiera stan kroków, `lastOutput` i autora; linki
-   prowadzą do logów kroków. HTTP 200 przy uruchomieniu oznacza przyjęcie, nie sukces potoku.
+   **Odśwież wynik**. Wynik JSON zawiera stan kroków, `lastOutput` i autora; link
+   prowadzi do widoku `exec.php` z logami kroków. Przeglądarka woła publiczne API (`apiFetch`). HTTP 200 przy uruchomieniu oznacza przyjęcie, nie sukces potoku.
 
 Używamy istniejącego `POST /api/exec-pipeline/{nazwa-metody}`. Powiązanie nazwy z ID
 potoku ustawia się w Zapq; nie ma potrzeby dodawania osobnego API do szablonu.
