@@ -13,7 +13,6 @@ code, .prefixed span { font-family: ui-monospace, monospace; overflow-wrap: anyw
 .prefixed { display: flex; }
 .prefixed span { padding: .7rem; background: #f2f5f8; border: 1px solid #bcc8d3; border-right: 0; border-radius: .3rem 0 0 .3rem; }
 .prefixed input { flex: 1; min-width: 0; border-radius: 0 .3rem .3rem 0; }
-.actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
 .badge { display: inline-block; padding: .1rem .6rem; border-radius: 1rem; background: #e3e9ef; font-size: .85em; font-weight: 600; }
 .badge[data-status="Ok"] { color: #1d6b38; background: #d9f2e1; }
 .badge[data-status="Error"], .badge[data-status="NeedsAttention"], .badge[data-status="OutcomeUnknown"] { color: #9b2424; background: #f8dede; }

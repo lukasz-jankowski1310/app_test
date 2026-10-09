@@ -78,7 +78,7 @@ Oczekuj stanu `Ok`, wyniku `{"source":"web-app","ok":true}` i linii logu podanej
 | `public/assets/style.css` | Statyczny arkusz stylów. |
 | `lib/database.php` | PDO, zapytania parametryzowane, utworzenie tabeli i obsługa zapisu. |
 | `lib/zapq.php` | Zaufany kontekst użytkownika i wywołanie API z PHP. |
-| `public/exec.php`, `public/assets/exec.js` | Widok `exec-pipeline/{metoda}`: własne wejście JSON, klucz idempotencji, status na żywo, wynik i logi kroków. |
+| `public/exec.php`, `public/assets/exec.js` | Widok `exec-pipeline/{metoda}` wołający publiczne API z przeglądarki (`apiFetch`): własne wejście JSON, klucz idempotencji, status na żywo, wynik i logi kroków. |
 | `public/run.php` | POST uruchamiający metodę API w imieniu użytkownika; opcjonalnie pola `input` (JSON, do 64 KiB) i `idempotencyKey`. |
 | `public/status.php` | GET wyniku uruchomienia lub logów kroku, z prawami użytkownika. |
 | `lib/config.php`, `lib/version.php` | Jawna nazwa metody API i oznaczenie wersji przykładu. |

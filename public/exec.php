@@ -28,16 +28,17 @@ function escape(string $value): string
     <?php if (!isset($_SERVER['HTTP_X_ZAPQ_USER_LOGIN'])) { ?>
         <p role="alert">Otwórz tę aplikację przez Zapq.</p>
     <?php } else { ?>
-        <p>Wywołuje <code>POST /api/exec-pipeline/{metoda}</code> jako
+        <p>Przeglądarka wywołuje publiczne API Zapq jako
             <strong><?= escape(rawurldecode($_SERVER['HTTP_X_ZAPQ_USER_LOGIN'])) ?></strong>.
             Wymaga prawa Pipelines.Run do potoku, a odczyt wyniku prawa Logs.View.</p>
+        <!-- Without JavaScript the form falls back to run.php, which calls the API from PHP. -->
         <form id="exec" method="post" action="run.php">
             <input type="hidden" name="<?= escape($_SERVER['HTTP_X_ZAPQ_CSRF_FIELD']) ?>" value="<?= escape($_SERVER['HTTP_X_ZAPQ_CSRF_TOKEN']) ?>">
             <!-- Repeating the same key and input returns the existing run instead of starting another. -->
             <input type="hidden" name="idempotencyKey" value="<?= bin2hex(random_bytes(16)) ?>">
             <label for="method">Metoda API</label>
             <div class="prefixed">
-                <span>exec-pipeline/</span>
+                <span><?= escape($_SERVER['HTTP_X_ZAPQ_API_URL']) ?>exec-pipeline/</span>
                 <input id="method" name="method" value="<?= escape($method) ?>" pattern="[a-zA-Z0-9_\-]{1,128}" required autocomplete="off">
             </div>
             <label for="input">Wejście JSON</label>
@@ -50,10 +51,7 @@ function escape(string $value): string
             <h2>Uruchomienie <code id="run-id"></code></h2>
             <p><span id="run-status" class="badge"></span> <span id="run-meta"></span></p>
             <p id="run-error" role="alert"></p>
-            <p class="actions">
-                <button id="refresh" type="button">Odśwież</button>
-                <a id="run-json">Wynik JSON</a>
-            </p>
+            <p><button id="refresh" type="button">Odśwież</button></p>
             <h3>Wynik (lastOutput)</h3>
             <pre id="run-output"></pre>
             <h3>Kroki</h3>

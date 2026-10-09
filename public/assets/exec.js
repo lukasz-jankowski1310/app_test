@@ -1,4 +1,6 @@
-import { applicationFetch } from './zapq.js';
+// The browser calls the public Zapq API (PathBase + /api/) with the user's token from _zapq/context.
+// Its Host is the instance domain, so it also works where AllowedHosts rejects the internal origin.
+import { apiFetch } from './zapq.js';
 
 const FINISHED = new Set(['Ok', 'Error', 'NeedsAttention', 'Cancelled']);
 const POLL_INTERVAL = 2000;
@@ -53,6 +55,7 @@ async function reason(response) {
 
 async function startError(response) {
     switch (response.status) {
+        case 401: return 'Sesja wygasła (HTTP 401). Odśwież stronę.';
         case 403: return 'Brak prawa Pipelines.Run do potoku tej metody (HTTP 403).';
         case 404: return `Nie ma metody API „${form.elements.method.value}” (HTTP 404).`;
         case 409:
@@ -65,6 +68,7 @@ async function startError(response) {
 
 async function readError(response) {
     switch (response.status) {
+        case 401: return 'Sesja wygasła (HTTP 401). Odśwież stronę.';
         case 403: return 'Brak prawa Logs.View do potoku (HTTP 403). Samo uruchomienie mogło się udać.';
         case 404: return 'Nie znaleziono uruchomienia (HTTP 404).';
         default: return `Odczyt wyniku: HTTP ${response.status}: ${await reason(response)}`;
@@ -74,8 +78,7 @@ async function readError(response) {
 async function loadLogs(stepId) {
     const item = steps.get(stepId);
     try {
-        const response = await applicationFetch(
-            `status.php?runId=${encodeURIComponent(runId)}&stepRunId=${encodeURIComponent(stepId)}`);
+        const response = await apiFetch(`runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/logs`);
         if (!response.ok) {
             throw new Error(await readError(response));
         }
@@ -98,14 +101,11 @@ function renderStep(step) {
         const badge = document.createElement('span');
         const output = document.createElement('pre');
         const logs = document.createElement('pre');
-        const link = document.createElement('a');
         badge.className = 'badge';
         logs.textContent = 'Wczytywanie logów…';
-        link.href = `status.php?runId=${encodeURIComponent(runId)}&stepRunId=${encodeURIComponent(step.id)}`;
-        link.textContent = 'Logi JSON';
         summary.append(badge, ' ', title);
         const heading = text => Object.assign(document.createElement('h4'), { textContent: text });
-        details.append(summary, heading('Wyjście'), output, heading('Logi'), logs, link);
+        details.append(summary, heading('Wyjście'), output, heading('Logi'), logs);
         details.addEventListener('toggle', () => details.open && loadLogs(step.id));
         stepList.append(details);
         item = { details, title, badge, output, logs };
@@ -142,7 +142,7 @@ async function refresh() {
     refreshButton.disabled = true;
     runError.textContent = '';
     try {
-        const response = await applicationFetch(`status.php?runId=${encodeURIComponent(id)}`);
+        const response = await apiFetch(`runs/${encodeURIComponent(id)}`);
         if (id !== runId) {
             return; // A newer run replaced this one while the request was in flight.
         }
@@ -179,7 +179,6 @@ function show(id) {
     steps.clear();
     stepList.replaceChildren();
     document.querySelector('#run-id').textContent = id;
-    document.querySelector('#run-json').href = `status.php?runId=${encodeURIComponent(id)}`;
     for (const selector of ['#run-meta', '#run-output', '#run-raw']) {
         document.querySelector(selector).textContent = '';
     }
@@ -208,8 +207,10 @@ form.addEventListener('submit', async event => {
     message.textContent = 'Uruchamianie…';
     try {
         // No automatic retry: a lost response may hide a started run. The user repeats it with the same key.
-        const response = await applicationFetch('run.php', {
-            method: 'POST', body: new URLSearchParams(new FormData(form))
+        const response = await apiFetch(`exec-pipeline/${encodeURIComponent(form.elements.method.value)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key.value },
+            body: form.elements.input.value
         });
         if (!response.ok) {
             throw new Error(await startError(response));
