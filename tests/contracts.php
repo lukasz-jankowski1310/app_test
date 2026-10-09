@@ -4,10 +4,26 @@ require_once dirname(__DIR__) . '/lib/zapq.php';
 
 foreach (['', '../runs', 'https://example.invalid', "bad\nmethod"] as $method) {
     try {
-        zapq_run_pipeline($method, []);
+        zapq_run_pipeline($method, '{}');
         throw new RuntimeException('Invalid method reached the API.');
     } catch (InvalidArgumentException $expected) {
         // Validate before reading a session or opening a connection.
+    }
+}
+
+foreach (['', '{', "{'a':1}", '{"a":1} x', '[' . str_repeat('1,', 32768) . '1]'] as $input) {
+    try {
+        zapq_run_pipeline('demo', $input);
+        throw new RuntimeException('Invalid or oversized JSON input reached the API.');
+    } catch (InvalidArgumentException $expected) {
+    }
+}
+
+foreach (['', "key\r\nInjected: header", 'key with spaces', str_repeat('a', 101)] as $key) {
+    try {
+        zapq_run_pipeline('demo', '{}', $key);
+        throw new RuntimeException('Invalid idempotency key reached the API.');
+    } catch (InvalidArgumentException $expected) {
     }
 }
 

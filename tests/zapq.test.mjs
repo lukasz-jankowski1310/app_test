@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const source = await readFile(new URL('../public/assets/zapq.js', import.meta.url), 'utf8');
 
 test('all browser modules have valid JavaScript syntax', async () => {
-    for (const file of ['zapq.js', 'pipeline.js']) {
+    for (const file of ['zapq.js', 'pipeline.js', 'exec.js']) {
         new vm.SourceTextModule(await readFile(new URL(`../public/assets/${file}`, import.meta.url), 'utf8'));
     }
 });

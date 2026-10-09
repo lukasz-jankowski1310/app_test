@@ -23,13 +23,24 @@ function zapq_context(): array
     ];
 }
 
-function zapq_run_pipeline(string $method, mixed $input): array
+// The input is sent exactly as written: decoding and re-encoding in PHP could change numbers or {} vs [].
+function zapq_run_pipeline(string $method, string $inputJson, ?string $idempotencyKey = null): array
 {
     if (!preg_match('/^[a-zA-Z0-9_-]{1,128}$/D', $method)) {
         throw new InvalidArgumentException('Invalid API method name.');
     }
 
-    return zapq_api('POST', 'exec-pipeline/' . rawurlencode($method), $input);
+    if (strlen($inputJson) > 65536 || !json_validate($inputJson)) {
+        throw new InvalidArgumentException('Pipeline input must be valid JSON up to 64 KiB.');
+    }
+
+    // The same key and body return the original run instead of starting a second one.
+    if ($idempotencyKey !== null && !preg_match('/^[a-zA-Z0-9_-]{1,100}$/D', $idempotencyKey)) {
+        throw new InvalidArgumentException('Invalid idempotency key.');
+    }
+
+    $headers = $idempotencyKey === null ? [] : ['Idempotency-Key: ' . $idempotencyKey];
+    return zapq_api('POST', 'exec-pipeline/' . rawurlencode($method), $inputJson, $headers);
 }
 
 function zapq_run_status(string $runId, ?string $stepRunId = null): array
@@ -48,7 +59,7 @@ function zapq_run_status(string $runId, ?string $stepRunId = null): array
     return zapq_api('GET', $path);
 }
 
-function zapq_api(string $method, string $path, mixed $input = null): array
+function zapq_api(string $method, string $path, ?string $body = null, array $headers = []): array
 {
     // Internal routes only; never accept a complete URL from a form or follow redirects with a JWT.
     if (!preg_match('~^(?:exec-pipeline/[a-zA-Z0-9_-]{1,128}|runs/[0-9a-f-]{36}(?:/steps/[0-9a-f-]{36}/logs)?)$~iD', $path) ||
@@ -60,14 +71,14 @@ function zapq_api(string $method, string $path, mixed $input = null): array
     $request = curl_init($context['internal_api_url'] . $path);
     curl_setopt_array($request, [
         CURLOPT_CUSTOMREQUEST => $method,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $context['token']],
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $context['token'], ...$headers],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_CONNECTTIMEOUT => 3,
         CURLOPT_TIMEOUT => 15
     ]);
     if ($method === 'POST') {
-        curl_setopt($request, CURLOPT_POSTFIELDS, json_encode($input, JSON_THROW_ON_ERROR));
+        curl_setopt($request, CURLOPT_POSTFIELDS, $body ?? 'null');
     }
 
     try {

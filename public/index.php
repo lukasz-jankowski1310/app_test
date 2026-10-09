@@ -69,6 +69,7 @@ function escape(string $value): string
             <pre id="run-result"></pre>
             <ul id="step-logs"></ul>
         </div>
+        <p><a href="exec.php">Uruchom potok z własnym wejściem JSON</a></p>
         <p><a href="static.html">Przykład formularza z fetch</a></p>
         <script type="module" src="assets/pipeline.js"></script>
     <?php } ?>

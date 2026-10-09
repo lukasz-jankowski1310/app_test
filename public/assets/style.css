@@ -7,3 +7,18 @@ li { padding: .4rem; overflow-wrap: anywhere; }
 [role="alert"] { color: #9b2424; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f2f5f8; padding: 1rem; }
 button:disabled { opacity: .6; cursor: wait; }
+main.wide { max-width: 60rem; }
+textarea { padding: .7rem; font: .9rem/1.4 ui-monospace, monospace; border: 1px solid #bcc8d3; border-radius: .3rem; resize: vertical; }
+code, .prefixed span { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.prefixed { display: flex; }
+.prefixed span { padding: .7rem; background: #f2f5f8; border: 1px solid #bcc8d3; border-right: 0; border-radius: .3rem 0 0 .3rem; }
+.prefixed input { flex: 1; min-width: 0; border-radius: 0 .3rem .3rem 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+.badge { display: inline-block; padding: .1rem .6rem; border-radius: 1rem; background: #e3e9ef; font-size: .85em; font-weight: 600; }
+.badge[data-status="Ok"] { color: #1d6b38; background: #d9f2e1; }
+.badge[data-status="Error"], .badge[data-status="NeedsAttention"], .badge[data-status="OutcomeUnknown"] { color: #9b2424; background: #f8dede; }
+.badge[data-status="Dispatched"], .badge[data-status="Executing"] { color: #174b78; background: #dde9f7; }
+details { margin: .5rem 0; padding: .5rem .75rem; border: 1px solid #dbe2e8; border-radius: .3rem; }
+summary { cursor: pointer; }
+details h4 { margin: .75rem 0 .25rem; font-size: .9rem; }
+#steps pre { max-height: 24rem; overflow: auto; }

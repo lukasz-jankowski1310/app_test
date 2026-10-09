@@ -11,12 +11,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 try {
-    if (!is_string($_POST['method'] ?? null)) {
-        throw new InvalidArgumentException('Provide an API method name.');
+    if (!is_string($_POST['method'] ?? null) ||
+        (isset($_POST['input']) && !is_string($_POST['input'])) ||
+        (isset($_POST['idempotencyKey']) && !is_string($_POST['idempotencyKey']))) {
+        throw new InvalidArgumentException('Provide an API method name, optional JSON input and idempotency key.');
     }
 
     // The gateway has already checked the session, Open and CSRF. The API checks Pipelines.Run.
-    $result = zapq_run_pipeline($_POST['method'], ['source' => 'web-app']);
+    $result = zapq_run_pipeline(
+        $_POST['method'],
+        $_POST['input'] ?? json_encode(['source' => 'web-app'], JSON_THROW_ON_ERROR),
+        ($_POST['idempotencyKey'] ?? '') === '' ? null : $_POST['idempotencyKey']
+    );
     http_response_code($result['status']);
     echo $result['body'];
 } catch (InvalidArgumentException $exception) {

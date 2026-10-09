@@ -9,7 +9,7 @@ foreach (['pdo_sqlite', 'mbstring', 'curl'] as $extension) {
     }
 }
 
-foreach (['public/index.php', 'public/run.php', 'public/status.php', 'public/state.php',
+foreach (['public/index.php', 'public/exec.php', 'public/run.php', 'public/status.php', 'public/state.php',
     'lib/database.php', 'lib/zapq.php', 'lib/config.php', 'lib/version.php',
     'README.md', 'docs/agent.md', '.github/workflows/check.yml', '.gitlab-ci.yml'] as $path) {
     if (!is_file($root . '/' . $path)) {
