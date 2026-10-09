@@ -1,0 +1,9 @@
+:root { font-family: system-ui, sans-serif; color: #172534; background: #f2f5f8; }
+main { max-width: 38rem; margin: 4rem auto; padding: 2rem; background: white; border-radius: .75rem; }
+form { display: grid; gap: .6rem; }
+input, button { padding: .7rem; font: inherit; border: 1px solid #bcc8d3; border-radius: .3rem; }
+button { color: white; background: #174b78; cursor: pointer; }
+li { padding: .4rem; overflow-wrap: anywhere; }
+[role="alert"] { color: #9b2424; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f2f5f8; padding: 1rem; }
+button:disabled { opacity: .6; cursor: wait; }

@@ -1,0 +1,29 @@
+name: Check Web application
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: PHP lint, SQLite and template contracts
+        run: >-
+          docker run --rm --network none --read-only --tmpfs /tmp
+          -v "$GITHUB_WORKSPACE:/template:ro" -w /template
+          php:8.4.26-fpm-alpine3.24@sha256:78cd8de9970a9cd6ff4d98860a94eb5bf37dd2d5776b4785562dbfad01c29d5a
+          php tests/check.php
+      - name: Browser API client contracts
+        run: node --experimental-vm-modules --test tests/zapq.test.mjs

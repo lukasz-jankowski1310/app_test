@@ -1,0 +1,13 @@
+stages: [test]
+
+php:
+  stage: test
+  image: php:8.4.26-fpm-alpine3.24@sha256:78cd8de9970a9cd6ff4d98860a94eb5bf37dd2d5776b4785562dbfad01c29d5a
+  script:
+    - php tests/check.php
+
+javascript:
+  stage: test
+  image: node:24-alpine
+  script:
+    - node --experimental-vm-modules --test tests/zapq.test.mjs

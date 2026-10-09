@@ -1,0 +1,13 @@
+*.sqlite
+*.sqlite-*
+*.db
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

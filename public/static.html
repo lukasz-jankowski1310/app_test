@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zapq — formularz fetch</title>
+<link rel="stylesheet" href="assets/style.css">
+<main>
+  <h1>Formularz fetch</h1>
+  <p id="user"></p>
+  <form id="note">
+    <label for="value">Nowy wpis</label>
+    <input id="value" name="value" required maxlength="200">
+    <button>Zapisz</button>
+  </form>
+  <p id="result" role="status"></p>
+  <a href="./">Powrót</a>
+</main>
+<script type="module">
+import { context, applicationFetch } from './assets/zapq.js';
+try {
+    document.querySelector('#user').textContent = 'Zalogowano jako ' + (await context()).user.login;
+} catch (error) {
+    document.querySelector('#result').textContent = error.message;
+}
+
+document.querySelector('#note').addEventListener('submit', async event => {
+    event.preventDefault();
+    try {
+        const response = await applicationFetch('state.php', { method: 'POST', body: new URLSearchParams(new FormData(event.target)) });
+        document.querySelector('#result').textContent = response.ok ? 'Zapisano.' : `Błąd HTTP ${response.status}`;
+    } catch (error) {
+        document.querySelector('#result').textContent = error.message;
+    }
+});
+</script>
+</html>
