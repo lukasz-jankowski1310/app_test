@@ -28,10 +28,11 @@ function escape(string $value): string
     <?php if (!isset($_SERVER['HTTP_X_ZAPQ_USER_LOGIN'])) { ?>
         <p role="alert">Otwórz tę aplikację przez Zapq.</p>
     <?php } else { ?>
-        <p>Przeglądarka wywołuje publiczne API Zapq jako
+        <p>PHP uruchamia potok jako
             <strong><?= escape(rawurldecode($_SERVER['HTTP_X_ZAPQ_USER_LOGIN'])) ?></strong>.
-            Wymaga prawa Pipelines.Run do potoku, a odczyt wyniku prawa Logs.View.</p>
-        <!-- Without JavaScript the form falls back to run.php, which calls the API from PHP. -->
+            Wynik całego potoku odbiera webhook i zapisuje w aplikacji. Odczyt jest dostępny dla autora uruchomienia.
+            Logi kroków wymagają prawa Logs.View.</p>
+        <!-- Both the form and JavaScript call PHP; only PHP starts the pipeline. -->
         <form id="exec" method="post" action="run.php">
             <input type="hidden" name="<?= escape($_SERVER['HTTP_X_ZAPQ_CSRF_FIELD']) ?>" value="<?= escape($_SERVER['HTTP_X_ZAPQ_CSRF_TOKEN']) ?>">
             <!-- Repeating the same key and input returns the existing run instead of starting another. -->
@@ -42,7 +43,7 @@ function escape(string $value): string
                 <input id="method" name="method" value="<?= escape($method) ?>" pattern="[a-zA-Z0-9_\-]{1,128}" required autocomplete="off">
             </div>
             <label for="input">Wejście JSON</label>
-            <textarea id="input" name="input" rows="8" maxlength="65536" spellcheck="false" required>{"source": "web-app"}</textarea>
+            <textarea id="input" name="input" rows="8" maxlength="65536" spellcheck="false" required>{"Name": "PHP webhook demo"}</textarea>
             <button type="submit">Uruchom</button>
         </form>
         <p id="message" role="status"></p>
@@ -51,18 +52,19 @@ function escape(string $value): string
             <h2>Uruchomienie <code id="run-id"></code></h2>
             <p><span id="run-status" class="badge"></span> <span id="run-meta"></span></p>
             <p id="run-error" role="alert"></p>
-            <p><button id="refresh" type="button">Odśwież</button></p>
+            <p>PHP odbiera webhook automatycznie. Przycisk odczytuje zapisany wynik, bez odpytywania API Zapq.</p>
+            <p><button id="refresh" type="button">Odczytaj odebrany webhook</button></p>
             <h3>Wynik (lastOutput)</h3>
             <pre id="run-output"></pre>
             <h3>Kroki</h3>
             <div id="steps"></div>
             <details>
-                <summary>Pełna odpowiedź API</summary>
+                <summary>Odebrany webhook</summary>
                 <pre id="run-raw"></pre>
             </details>
         </section>
 
-        <h2>Otwórz istniejące uruchomienie</h2>
+        <h2>Otwórz swoje uruchomienie z tej aplikacji</h2>
         <form id="lookup" method="get" action="status.php">
             <label for="run-lookup">ID uruchomienia (runId)</label>
             <input id="run-lookup" name="runId" required autocomplete="off"

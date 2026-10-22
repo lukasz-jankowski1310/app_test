@@ -1,10 +1,7 @@
-// The browser calls the public Zapq API (PathBase + /api/) with the user's token from _zapq/context.
-// Its Host is the instance domain, so it also works where AllowedHosts rejects the internal origin.
+// PHP starts the pipeline and receives its result through the signed webhook.
 import { apiFetch } from './zapq.js';
+import { startPipeline, receivedResult } from './runs.js';
 
-const FINISHED = new Set(['Ok', 'Error', 'NeedsAttention', 'Cancelled']);
-const POLL_INTERVAL = 2000;
-const POLL_LIMIT = 90; // About three minutes; afterwards the user refreshes manually.
 const RUN_ID = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const UNCERTAIN = 'Brak odpowiedzi API: nie wiadomo, czy potok wystartował. Kliknij „Uruchom” jeszcze raz ' +
     'bez zmian, a ten sam klucz idempotencji zwróci istniejące uruchomienie zamiast startować drugie.';
@@ -19,8 +16,6 @@ const runError = document.querySelector('#run-error');
 const stepList = document.querySelector('#steps');
 const steps = new Map();
 let runId;
-let timer;
-let polls = 0;
 
 function newKey() {
     key.value = crypto.randomUUID();
@@ -69,8 +64,8 @@ async function startError(response) {
 async function readError(response) {
     switch (response.status) {
         case 401: return 'Sesja wygasła (HTTP 401). Odśwież stronę.';
-        case 403: return 'Brak prawa Logs.View do potoku (HTTP 403). Samo uruchomienie mogło się udać.';
-        case 404: return 'Nie znaleziono uruchomienia (HTTP 404).';
+        case 403: return 'Brak dostępu do aplikacji (HTTP 403).';
+        case 404: return 'Uruchomienie nie zostało wykonane przez Ciebie w tej aplikacji (HTTP 404).';
         default: return `Odczyt wyniku: HTTP ${response.status}: ${await reason(response)}`;
     }
 }
@@ -80,7 +75,7 @@ async function loadLogs(stepId) {
     try {
         const response = await apiFetch(`runs/${encodeURIComponent(runId)}/steps/${encodeURIComponent(stepId)}/logs`);
         if (!response.ok) {
-            throw new Error(await readError(response));
+            throw new Error(`Odczyt logów: HTTP ${response.status}. Wymagane prawo Logs.View do potoku.`);
         }
 
         const result = await response.json();
@@ -115,34 +110,33 @@ function renderStep(step) {
     }
 
     const attempts = step.attemptCount > 1 ? `, próby: ${step.attemptCount}` : '';
-    item.title.textContent = `${step.order}. ${step.methodName ?? '(bez nazwy)'}` +
+    item.title.textContent = `${step.order + 1}. ${step.methodName ?? 'Krok potoku'}` +
         `${step.runnerName ? ` na ${step.runnerName}` : ''}${attempts}`;
     setBadge(item.badge, step.status);
-    item.output.textContent = step.output == null ? 'Brak wyjścia.' : pretty(step.output);
+    item.output.textContent = step.output == null ? 'Webhook przekazuje wynik całego potoku poniżej statusu.' : pretty(step.output);
 }
 
 function render(run) {
-    setBadge(document.querySelector('#run-status'), run.status);
+    setBadge(document.querySelector('#run-status'), run.webhookReceived ? run.status : 'Oczekiwanie na webhook');
     document.querySelector('#run-meta').textContent = [
-        run.pipelineName && `Potok: ${run.pipelineName}`,
+        run.apiMethod && `Metoda: ${run.apiMethod}`,
         run.requester?.userName && `Autor: ${run.requester.userName}`,
         run.createdAt && `Start: ${time(run.createdAt)}`,
-        run.finishedAt && `Koniec: ${time(run.finishedAt)}`
+        run.receivedAt && `Webhook odebrany: ${time(run.receivedAt)}`
     ].filter(Boolean).join(' · ');
     document.querySelector('#run-output').textContent = run.lastOutput == null ? 'Brak.' : pretty(run.lastOutput);
-    document.querySelector('#run-raw').textContent = JSON.stringify(run, null, 2);
+    document.querySelector('#run-raw').textContent = JSON.stringify(run.webhook ?? { message: 'PHP czeka na webhook z wynikiem potoku.' }, null, 2);
     for (const step of run.steps ?? []) {
         renderStep(step);
     }
 }
 
 async function refresh() {
-    clearTimeout(timer);
     const id = runId;
     refreshButton.disabled = true;
     runError.textContent = '';
     try {
-        const response = await apiFetch(`runs/${encodeURIComponent(id)}`);
+        const response = await receivedResult(id);
         if (id !== runId) {
             return; // A newer run replaced this one while the request was in flight.
         }
@@ -151,16 +145,7 @@ async function refresh() {
             throw new Error(await readError(response));
         }
 
-        // 204: the run has no steps (yet).
-        const run = response.status === 204 ? { runId: id, status: 'Waiting', steps: [] } : await response.json();
-        render(run);
-        if (!FINISHED.has(run.status)) {
-            if (++polls < POLL_LIMIT) {
-                timer = setTimeout(refresh, POLL_INTERVAL);
-            } else {
-                runError.textContent = 'Automatyczne odświeżanie zatrzymane. Kliknij „Odśwież”.';
-            }
-        }
+        render(await response.json());
     } catch (error) {
         if (id === runId) {
             runError.textContent = error.message;
@@ -173,9 +158,7 @@ async function refresh() {
 }
 
 function show(id) {
-    clearTimeout(timer);
     runId = id;
-    polls = 0;
     steps.clear();
     stepList.replaceChildren();
     document.querySelector('#run-id').textContent = id;
@@ -185,7 +168,7 @@ function show(id) {
 
     setBadge(document.querySelector('#run-status'), '…');
     panel.hidden = false;
-    // Only IDs go into the address, so a reload shows the same run. Never put tokens in URLs.
+    // Only IDs go into the address. The result is read from PHP's local webhook storage.
     const url = new URL(location.href);
     url.searchParams.set('method', form.elements.method.value);
     url.searchParams.set('runId', id);
@@ -207,11 +190,7 @@ form.addEventListener('submit', async event => {
     message.textContent = 'Uruchamianie…';
     try {
         // No automatic retry: a lost response may hide a started run. The user repeats it with the same key.
-        const response = await apiFetch(`exec-pipeline/${encodeURIComponent(form.elements.method.value)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key.value },
-            body: form.elements.input.value
-        });
+        const response = await startPipeline(form.elements.method.value, form.elements.input.value, key.value);
         if (!response.ok) {
             throw new Error(await startError(response));
         }
@@ -242,7 +221,6 @@ document.querySelector('#lookup').addEventListener('submit', event => {
 });
 
 refreshButton.addEventListener('click', () => {
-    polls = 0;
     refresh();
 });
 

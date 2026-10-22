@@ -6,9 +6,29 @@ import vm from 'node:vm';
 const source = await readFile(new URL('../public/assets/zapq.js', import.meta.url), 'utf8');
 
 test('all browser modules have valid JavaScript syntax', async () => {
-    for (const file of ['zapq.js', 'pipeline.js', 'exec.js']) {
+    for (const file of ['zapq.js', 'runs.js', 'pipeline.js', 'exec.js']) {
         new vm.SourceTextModule(await readFile(new URL(`../public/assets/${file}`, import.meta.url), 'utf8'));
     }
+});
+
+test('pipeline requests go through PHP and preserve input and idempotency key', async () => {
+    const calls = [];
+    const context = vm.createContext({ URLSearchParams });
+    const dependency = new vm.SyntheticModule(['applicationFetch'], function () {
+        this.setExport('applicationFetch', (path, options) => { calls.push({ path, options }); });
+    }, { context });
+    const module = new vm.SourceTextModule(await readFile(new URL('../public/assets/runs.js', import.meta.url), 'utf8'), { context });
+    await module.link(() => dependency);
+    await module.evaluate();
+    const input = '{ "Name": "Łódź", "number": 9007199254740993 }';
+    await module.namespace.startPipeline('demo', input, 'same-key');
+    assert.equal(calls[0].path, 'run.php');
+    assert.equal(calls[0].options.method, 'POST');
+    assert.equal(calls[0].options.body.get('input'), input);
+    assert.equal(calls[0].options.body.get('idempotencyKey'), 'same-key');
+    await module.namespace.receivedResult('run-id');
+    assert.equal(calls[1].path, 'status.php?runId=run-id');
+    assert.equal(calls.length, 2);
 });
 
 async function client(prefix = '/firma', denyContext = false) {

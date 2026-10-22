@@ -42,4 +42,5 @@ foreach ($files as $file) {
 
 require __DIR__ . '/database.php';
 require __DIR__ . '/contracts.php';
-echo "Template OK: $linted PHP files linted; database and API contract checks passed.\n";
+require __DIR__ . '/webhooks.php';
+echo "Template OK: $linted PHP files linted; database, webhook and API contract checks passed.\n";

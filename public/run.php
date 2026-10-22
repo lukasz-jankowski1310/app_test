@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/lib/zapq.php';
+require dirname(__DIR__) . '/lib/webhooks.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
@@ -17,12 +18,20 @@ try {
         throw new InvalidArgumentException('Provide an API method name, optional JSON input and idempotency key.');
     }
 
+    // Check local storage before starting work. The callback may arrive before registration.
+    $database = webhook_database();
+    $context = zapq_context();
     // The gateway has already checked the session, Open and CSRF. The API checks Pipelines.Run.
     $result = zapq_run_pipeline(
         $_POST['method'],
-        $_POST['input'] ?? json_encode(['source' => 'web-app'], JSON_THROW_ON_ERROR),
+        $_POST['input'] ?? json_encode(['Name' => 'PHP webhook demo'], JSON_THROW_ON_ERROR),
         ($_POST['idempotencyKey'] ?? '') === '' ? null : $_POST['idempotencyKey']
     );
+    if ($result['status'] >= 200 && $result['status'] < 300) {
+        $started = json_decode($result['body'], true, 32, JSON_THROW_ON_ERROR);
+        register_application_run($database, $started['runId'], $context['user_id'], $_POST['method']);
+    }
+
     http_response_code($result['status']);
     echo $result['body'];
 } catch (InvalidArgumentException $exception) {

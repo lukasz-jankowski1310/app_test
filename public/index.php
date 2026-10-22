@@ -57,6 +57,8 @@ function escape(string $value): string
     <?php if (isset($_SERVER['HTTP_X_ZAPQ_USER_LOGIN'])) { ?>
         <p>Zalogowano jako <?= escape(rawurldecode($_SERVER['HTTP_X_ZAPQ_USER_LOGIN'])) ?>.</p>
         <form id="pipeline" method="post" action="run.php">
+            <input type="hidden" name="idempotencyKey" value="<?= bin2hex(random_bytes(16)) ?>">
+            <input type="hidden" name="input" value="{&quot;Name&quot;:&quot;PHP webhook demo&quot;}">
             <input type="hidden" name="<?= escape($_SERVER['HTTP_X_ZAPQ_CSRF_FIELD']) ?>" value="<?= escape($_SERVER['HTTP_X_ZAPQ_CSRF_TOKEN']) ?>">
             <label for="method">Nazwa metody API potoku</label>
             <input id="method" name="method" value="<?= escape($config['api_method']) ?>" pattern="[a-zA-Z0-9_-]{1,128}" required>
@@ -64,8 +66,8 @@ function escape(string $value): string
         </form>
         <p id="pipeline-message" role="status"></p>
         <div id="pipeline-status" hidden>
-            <p><a id="run-link">Szczegóły i logi kroków</a></p>
-            <button id="refresh-run" type="button">Odśwież wynik</button>
+            <p><a id="run-link">Wynik webhooka i logi kroków</a></p>
+            <button id="refresh-run" type="button">Odczytaj odebrany webhook</button>
             <pre id="run-result"></pre>
             <ul id="step-logs"></ul>
         </div>

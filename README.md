@@ -24,18 +24,54 @@ Nie tworzysz obrazu Docker dla każdej aplikacji. Szablon nie wymaga Composera a
 6. Nadaj użytkownikowi Open do aplikacji. Otwórz ją z menu **Twoje aplikacje**, zapisz
    notatkę i sprawdź `state.php`: `values`, `file`, `version` i `integrity: "ok"`.
 7. W Zapq przygotuj testowy potok z metodą wdrożoną na runnerze i przypisz do niego
-   niestandardową metodę API. Szablon wysyła JSON `{"source":"web-app"}`; potok musi
-   akceptować to wejście. Dla innego kontraktu zmień wejście w `public/run.php`.
+   metodę API. Formularze wysyłają przykładowo JSON `{"Name":"PHP webhook demo"}`;
+   w `exec.php` można podać własne wejście. Domyślna metoda to `app-test-webhook`.
 8. Wpisz nazwę metody API w formularzu albo ustaw ją jako domyślną w `lib/config.php`.
    To jawna konfiguracja wskazująca potok, nie poświadczenie. Uruchom potok i kliknij
-   **Odśwież wynik**. Wynik JSON zawiera stan kroków, `lastOutput` i autora; link
-   prowadzi do widoku `exec.php` z logami kroków. Przeglądarka woła publiczne API (`apiFetch`). HTTP 200 przy uruchomieniu oznacza przyjęcie, nie sukces potoku.
+   **Odczytaj odebrany webhook**. Wynik pochodzi z SQLite aplikacji i zawiera status całego
+   potoku, stany kroków oraz `lastOutput`. PHP uruchamia potok przez API jako zalogowany
+   użytkownik. HTTP 200 przy uruchomieniu oznacza przyjęcie, nie sukces potoku.
 
 Używamy istniejącego `POST /api/exec-pipeline/{nazwa-metody}`. Powiązanie nazwy z ID
 potoku ustawia się w Zapq; nie ma potrzeby dodawania osobnego API do szablonu.
 Bez JavaScript formularz nadal uruchamia potok i zwraca JSON z `runId`; wynik odczytasz
 pod `status.php?runId=<runId>`. Nie ponawiaj automatycznie nieudanego POST: potok mógł
-już wystartować mimo utraty odpowiedzi. Szablon nie zapisuje historii wyników w SQLite.
+już wystartować mimo utraty odpowiedzi. Powtórz takie żądanie z tym samym kluczem idempotencji.
+
+## Wynik potoku przez webhook
+
+Przepływ: formularz → `run.php` → API Zapq → potok → webhook .NET → `api/webhook.php` → SQLite.
+Nie uruchamiamy osobnego procesu ani socketu PHP. Zwykły POST uruchamia odbiornik przez PHP-FPM.
+
+1. W konfiguracji potoku dodaj webhook na adres
+   `https://<instancja>/<firma>/ui/<aplikacja>/api/webhook.php`. Lokalny Compose może używać
+   wewnętrznego adresu `http://app:8080/hdwr-demo/ui/ux-audyt-20261016/api/webhook.php`.
+2. Zapisz konfigurację odbiornika w `$ZAPQIO_APPLICATION_DATA_DIRECTORY/webhook.json`:
+   `{"webhookId":"<ID webhooka>","secrets":["<sekret podpisu z konfiguracji potoku>"]}`.
+   Plik ma należeć do UID aplikacji i mieć prawa `0600`. Nie umieszczaj go w repo ani `public/`.
+   Przy rotacji wpisz oba aktywne sekrety; po okresie przejściowym usuń stary.
+3. Wdróż commit aplikacji. Uruchom potok z `exec.php`, a następnie odczytaj odebrany wynik.
+
+Webhook `pipelineRun.jobFinished` może przyjść po kolejnych krokach, ale `data.status` zawsze
+opisuje **cały potok**. Odbiornik zapisuje również `data.runId`, `data.lastOutput` i `data.steps`.
+Nie traktujemy zakończenia pierwszego kroku jako sukcesu całego uruchomienia. Statusy to
+`waiting`, `executing`, `ok`, `error`, `needsAttention`, `cancelled`; `needsAttention` wymaga
+rozstrzygnięcia przez operatora i może zostać później zastąpiony nowym wynikiem.
+
+Odbiornik sprawdza HMAC-SHA256 nad `timestamp + "." + surowe body`, ID webhooka oraz świeżość
+podpisu (5 minut). Sekret jest tekstem, bez dekodowania hex. Ponowienie z tym samym ID dostawy
+zwraca 200 bez powtórzenia zapisu; starsze zdarzenie nie zastępuje nowszego wyniku.
+200 jest wysyłane dopiero po trwałym zapisie. Nieudany zapis zwraca 503, aby Zapq ponowił dostawę.
+
+`store_webhook()` w `lib/webhooks.php` jest miejscem na dalszą obsługę biznesową. W tym przykładzie
+akcją jest zapis wyniku. Dodatkowe lokalne zmiany należy zapisywać w tej samej transakcji co
+potwierdzenie dostawy; zewnętrzne skutki wymagają własnej idempotencji lub kolejki.
+
+Odbiór i zapis działają bez otwartej przeglądarki. Ekran odczytuje SQLite na żądanie przyciskiem;
+nie ma timera odpytującego API Zapq. Logi kroków są pobierane z API dopiero po otwarciu szczegółów
+i nadal wymagają `Logs.View`. Wyniki zapisane w tej aplikacji są dostępne tylko dla autora
+uruchomienia przez `run.php`, z aktywną sesją i dostępem do aplikacji. Nie udostępniamy dowolnych
+uruchomień z Zapq po samym `runId`; lokalny odczyt wyniku nie wymaga `Logs.View`.
 
 | Uprawnienie | Potrzebne do |
 |---|---|
@@ -44,9 +80,9 @@ już wystartować mimo utraty odpowiedzi. Szablon nie zapisuje historii wyników
 | `Deployments.Send` na `application` | Wdrożenia, rollbacku i wycofania; obejmuje podgląd. |
 | `Applications.Open` na aplikacji | Otwierania PHP, statyk i pobierania kontekstu. |
 | `Pipelines.Run` na potoku | Uruchamiania przez API jako zalogowany użytkownik. |
-| `Logs.View` w zakresie potoku | Odczytu wyniku, stanu i logów. |
+| `Logs.View` w zakresie potoku | Odczytu logów kroków z API Zapq. |
 
-Open, zarządzanie aplikacją i uruchamianie potoku są osobnymi prawami. Odczyt wyniku
+Open, zarządzanie aplikacją i uruchamianie potoku są osobnymi prawami. Odczyt logów
 może dać 403 mimo poprawnego uruchomienia. Nie wymaga to dodania logowania w aplikacji.
 
 ### Minimalny potok demonstracyjny
@@ -61,13 +97,14 @@ import zapqio
 def run(data: str) -> str:
     payload = json.loads(data)
     zapqio.log.info("Web template pipeline completed")
-    return json.dumps({"source": payload["source"], "ok": True})
+    return json.dumps({"Name": payload["Name"], "ok": True})
 ```
 
 Pobierz commit tego repo i wdróż go na runnerze wewnętrznym. W Zapq utwórz potok
 z jednym krokiem `template-echo` na tym runnerze, następnie metodę API np.
 `web-template-demo` przypisaną do ID tego potoku. Wpisz tę nazwę w formularzu aplikacji.
-Oczekuj stanu `Ok`, wyniku `{"source":"web-app","ok":true}` i linii logu podanej powyżej.
+Skonfiguruj webhook według sekcji powyżej. Oczekuj stanu `Ok`, wyniku
+`{"Name":"PHP webhook demo","ok":true}` i linii logu podanej powyżej.
 
 ## Pliki
 
@@ -78,9 +115,10 @@ Oczekuj stanu `Ok`, wyniku `{"source":"web-app","ok":true}` i linii logu podanej
 | `public/assets/style.css` | Statyczny arkusz stylów. |
 | `lib/database.php` | PDO, zapytania parametryzowane, utworzenie tabeli i obsługa zapisu. |
 | `lib/zapq.php` | Zaufany kontekst użytkownika i wywołanie API z PHP. |
-| `public/exec.php`, `public/assets/exec.js` | Widok `exec-pipeline/{metoda}` wołający publiczne API z przeglądarki (`apiFetch`): własne wejście JSON, klucz idempotencji, status na żywo, wynik i logi kroków. |
+| `public/exec.php`, `public/assets/exec.js`, `public/assets/runs.js` | Własne wejście JSON, uruchomienie przez PHP, klucz idempotencji, odczyt webhooka z lokalnej bazy i logi kroków na żądanie. |
 | `public/run.php` | POST uruchamiający metodę API w imieniu użytkownika; opcjonalnie pola `input` (JSON, do 64 KiB) i `idempotencyKey`. |
-| `public/status.php` | GET wyniku uruchomienia lub logów kroku, z prawami użytkownika. |
+| `public/status.php` | GET wyniku odebranego webhooka z SQLite, tylko dla autora uruchomienia. |
+| `public/api/webhook.php`, `lib/webhooks.php` | Odbiór bez sesji użytkownika: podpis, deduplikacja, zapis statusu całego potoku. |
 | `lib/config.php`, `lib/version.php` | Jawna nazwa metody API i oznaczenie wersji przykładu. |
 | `tests/`, `.github/workflows/check.yml`, `.gitlab-ci.yml` | Lint, kontrakty klienta i integralność SQLite; bez artefaktu wdrożeniowego. |
 | `docs/agent.md` | Dane wejściowe i scenariusz odbioru dla agenta w SR7. |
@@ -202,7 +240,9 @@ nazwami nagłówków HTTP, np. `X-Zapq-User-Id` odpowiada `HTTP_X_ZAPQ_USER_ID`.
 
 Formularz umieszcza CSRF w ukrytym polu; fetch do aplikacji w nagłówku. Token wymaga
 powiązanego cookie przeglądarki. Kontrolę wykonuje Web przed uruchomieniem PHP.
-Nie przekazujemy do PHP cookie logowania, klucza API ani wejściowego `Authorization`.
+Na stronach wymagających sesji nie przekazujemy do PHP cookie logowania, klucza API ani
+wejściowego `Authorization`. Ścieżki `/api/` aplikacji są wyjątkiem: odbiornik dostaje nagłówki
+webhooka, sam weryfikuje podpis i nie korzysta z `zapq_context()` ani sesji użytkownika.
 Nie zapisuj JWT w logach, URL, bazie ani HTML; `run.php` używa go tylko po stronie PHP.
 API zawsze ponownie rozstrzyga uprawnienia użytkownika. Autor aplikacji nie nadaje praw
 przez nagłówki ani nie przełącza wywołania na konto systemowe.

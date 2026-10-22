@@ -3,6 +3,7 @@
 *.db
 .env
 .env.*
+webhook.json
 *.pem
 *.key
 *.p12
